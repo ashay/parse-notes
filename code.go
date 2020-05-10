@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"sort"
@@ -104,8 +105,8 @@ func (entry Entry) Dump(fileExt string) string {
 
 // Key traversal function.  Start with `basePath`, check for files with
 // `fileExt` extension, add them (and subdirs) to `entry`, but make sure you
-// don't add `outPath` to the list.
-func __traverseDir(basePath string, fileExt string, entry *Entry, outPath string) {
+// don't add the same file as `outInfo`.
+func __traverseDir(basePath string, fileExt string, entry *Entry, outInfo os.FileInfo) {
 	files, err := ioutil.ReadDir(basePath)
 
 	if err != nil {
@@ -131,12 +132,11 @@ func __traverseDir(basePath string, fileExt string, entry *Entry, outPath string
 
 				// Recurse down to the next level.
 				subEntry := entry.subTopics[subTopic]
-				__traverseDir(fullPath, fileExt, subEntry, outPath)
+				__traverseDir(fullPath, fileExt, subEntry, outInfo)
 			}
 		} else if strings.HasSuffix(file.Name(), fileExt) {
 			// Include this note only if it is not the output file.
-			// XXX: Path matching is fragile.  Maybe use Stat()?
-			if fullPath != outPath {
+			if os.SameFile(outInfo, file) == false {
 
 				note := Note{name: name, timestamp: file.ModTime()}
 				entry.notes = append(entry.notes, note)
@@ -146,22 +146,33 @@ func __traverseDir(basePath string, fileExt string, entry *Entry, outPath string
 }
 
 // Top-level traversal function.
-func traverseDir(basePath string, fileExt string, outPath string) Entry {
+func traverseDir(basePath string, fileExt string, outInfo os.FileInfo) Entry {
 	rootEntry := blankEntry()
-	__traverseDir(basePath, fileExt, &rootEntry, outPath)
+	__traverseDir(basePath, fileExt, &rootEntry, outInfo)
 
 	return rootEntry
 }
 
 func main() {
-	dirPath := "."
-	fileExt := ".md"
+	outputFile := flag.String("out", "README.md", "Path to output file.")
+	fileExt := flag.String("ext", ".md", "Index files that have this extension.")
 
-	outputFile := "README.md"
-	outPath := dirPath + string(os.PathSeparator) + outputFile
+	flag.Parse()
+	args := flag.Args()
 
-	rootEntry := traverseDir(dirPath, fileExt, outPath)
-	dumpText := rootEntry.Dump(fileExt)
+	if len(args) != 1 {
+		panic("I need a path to parse, terminating.")
+	}
 
-	ioutil.WriteFile(outPath, []byte(dumpText), 0644)
+	dirPath := args[0]
+
+	outInfo, err := os.Stat(*outputFile)
+	if err != nil {
+		outInfo = nil
+	}
+
+	rootEntry := traverseDir(dirPath, *fileExt, outInfo)
+
+	dumpText := rootEntry.Dump(*fileExt)
+	ioutil.WriteFile(*outputFile, []byte(dumpText), 0644)
 }
