@@ -120,8 +120,8 @@ func __traverseDir(basePath string, fileExt string, entry *Entry, outInfo os.Fil
 		fullPath := basePath + string(os.PathSeparator) + name
 
 		if file.IsDir() {
-			// Ignore the .git directory.
-			if name != ".git" {
+			// Ignore any hidden directories.
+			if strings.HasPrefix(name, ".") == false {
 
 				// Check whether the map entry exists.  If not, create one.
 				_, test := entry.subTopics[subTopic]
